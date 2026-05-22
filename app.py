@@ -8,6 +8,7 @@ import joblib
 import numpy as np
 import re
 from scipy.sparse import hstack, csr_matrix
+from sqlalchemy import func, or_
 from datetime import datetime
 import secrets
 import os
@@ -168,30 +169,28 @@ def aboutus():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
+        username = (request.form.get('username') or '').strip()
+        email = (request.form.get('email') or '').strip().lower()
         password = request.form.get('password')
         
-        if User.query.filter_by(username=username).first():
+        if User.query.filter(func.lower(User.username) == username.lower()).first():
             flash('Username already exists', 'danger')
             return redirect(url_for('signup'))
         
-        if User.query.filter_by(email=email).first():
+        if User.query.filter(func.lower(User.email) == email).first():
             flash('Email already registered', 'danger')
             return redirect(url_for('signup'))
         
         user = User(
             username=username,
             email=email,
-            password_hash=generate_password_hash(password)
+            password_hash=generate_password_hash(password),
+            is_verified=True
         )
         db.session.add(user)
         db.session.commit()
         
-        if send_verification_email(user):
-            flash('Registration successful! Please check your email to verify your account.', 'success')
-        else:
-            flash('Registration successful! However, verification email could not be sent.', 'warning')
+        flash('Registration successful! You can log in now.', 'success')
         
         return redirect(url_for('login'))
     
@@ -200,16 +199,17 @@ def signup():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
+        login_identifier = (request.form.get('login_identifier') or '').strip()
         password = request.form.get('password')
         
-        user = User.query.filter_by(username=username).first()
+        user = User.query.filter(
+            or_(
+                func.lower(User.username) == login_identifier.lower(),
+                func.lower(User.email) == login_identifier.lower()
+            )
+        ).first()
         
         if user and check_password_hash(user.password_hash, password):
-            if not user.is_verified:
-                flash('Please verify your email before logging in.', 'warning')
-                return redirect(url_for('login'))
-            
             session['user_id'] = user.id
             session['username'] = user.username
             session['is_admin'] = user.is_admin
