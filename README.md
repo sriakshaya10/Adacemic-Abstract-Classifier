@@ -132,7 +132,7 @@ This project is released for educational purposes only.
 
 
 ---
-Just tell me 👍
+
 
 
 
